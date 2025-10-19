@@ -23,13 +23,12 @@ NAME
     screenshot_play.py
 
 SYNOPSIS
-    screenshot_play.py MODEL_PATH <flags>
-
-POSITIONAL ARGUMENTS
-    MODEL_PATH
-        Type: str
+    screenshot_play.py <flags>
 
 FLAGS
+    --model_path=MODEL_PATH
+        Type: str
+        Default: 'vocaela/Vocaela-500M'
     -d, --desktop=DESKTOP
         Type: Optional[bool]
         Default: None
@@ -57,9 +56,6 @@ FLAGS
     -o, --output_skip_special_tokens=OUTPUT_SKIP_SPECIAL_TOKENS
         Type: bool
         Default: False
-
-NOTES
-    You can also use flags syntax for POSITIONAL ARGUMENT
 ```
 
 It will output below messages:

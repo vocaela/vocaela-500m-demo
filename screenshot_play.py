@@ -62,6 +62,7 @@ output the next actions and wait for the next observation.
 If a parameter is not applicable, don't include it in the JSON object.
 """
 
+_DEFAULT_MODEL_PATH = "vocaela/Vocaela-500M"
 _DEFAULT_MAX_NEW_TOKENS: int = 512
 _DEFAULT_TEMPERATURE: float = 0.0
 _DEFAULT_TOP_P: float = 1.0
@@ -71,7 +72,7 @@ _DEFAULT_DTYPE: str = "float16"
 class HFInferenceClient:
     def __init__(
             self, 
-            model_path: str, 
+            model_path: str = _DEFAULT_MODEL_PATH, 
             temperature: float = _DEFAULT_TEMPERATURE,
             max_new_tokens: int = _DEFAULT_MAX_NEW_TOKENS,
             top_p: float = _DEFAULT_TOP_P,
@@ -215,7 +216,7 @@ _help_msg = """Enter instruction or command:
   - /exit: exit the program
 """
 def main(
-    model_path: str,
+    model_path: str = _DEFAULT_MODEL_PATH,
     desktop: bool = None,
     mobile: bool = None,
     temperature: float = _DEFAULT_TEMPERATURE,
