@@ -4,6 +4,6 @@ click sign in
 click search icon at top right
 click search icon at bottom
 click science menu
-close the page
+close the tab
 close the window
 minimize the window

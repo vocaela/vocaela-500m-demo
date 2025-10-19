@@ -3,6 +3,6 @@ click the tile with person on mountain
 open the menu of kids
 click get on the list
 close the get on the list
-go to address bar and type in google.com
+click address bar and type in google.com
 click the download icon
-click feedback
+click feedback # comment: 'feedback' text is in vertical direction

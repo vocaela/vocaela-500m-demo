@@ -1,7 +1,7 @@
 make phone call
 open messenger
 tap search box
-type in "voice"
+type "voice"
 swipe down from top
 swipe down from top right corner
 long press the mic icon

@@ -139,9 +139,14 @@ class HFInferenceClient:
 def create_messages(image_path, instruction, system_message: str):
     messages = [
         {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": system_message}
+            ]
+        },
+        {
             "role": "user", 
             "content": [
-                {"type": "text", "text": system_message},
                 {
                     "type": "image",
                     "url": image_path
@@ -183,11 +188,11 @@ def draw_groundings_on_image(image_path, output_text: str, output_path):
         image.save(output_path)
         return
     
-    def draw_coordinate(coord, color, r=10):
+    def draw_coordinate(coord, color, r=15):
         if isinstance(coord, list) and len(coord) == 2:
             x = int(coord[0] * width)
             y = int(coord[1] * height)
-            draw.ellipse((x - r, y - r, x + r, y + r), outline=color, width=3)
+            draw.ellipse((x - r, y - r, x + r, y + r), outline=color, width=8)
             return x, y
         return None
     
@@ -253,6 +258,11 @@ def main(
     instruction = None
     while True:
         try:
+            mode = "desktop" if desktop else "mobile"
+            print("\nCurrent settings:")
+            print(f"  Mode: {mode}")
+            print(f"  Image: {image_path}\n")
+            
             cmd = input(_help_msg)
             if cmd.startswith("/img"):
                 image_path = cmd.split(" ")[1].strip('"').strip("'")
@@ -282,7 +292,13 @@ def main(
             if image_path is None:
                 print("No image set yet. Please set the image path first using /img <image full path>")
                 continue
-
+            
+            mode = "desktop" if desktop else "mobile"
+            print("\nYou chose:")
+            print(f"  Mode: {mode}")
+            print(f"  Image: {image_path}")
+            print(f"  Instruction: {cmd}\n")
+            
             instruction = cmd
             messages = create_messages(image_path=image_path, instruction=instruction, system_message=system_message)
             output = inference_client.predict(messages)['text']
