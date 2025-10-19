@@ -4,11 +4,11 @@ This simple demo accepts a screenshot image and output:
 1. Actions json on terminal console
 2. Annotate concerned positions in the input image and save as a new image file in the same directory of the input image. For each action object, if it contains 'coordinate' field, the pixel position is annotated as a red circle on the image; if it contains 'coordinate2' field, the annotation is a blue circle.
 
-To install requirements, it is recommended to create a conda env. Two conda files are provided: `./screenshot_play_gpu.conda`, `./screenshot_play_cpu.conda`, for GPU and CPU respectively.
+To install requirements, it is recommended to create a conda env. Two conda files are provided: `./screenshot_play_gpu.conda.yaml`, `./screenshot_play_cpu.conda.yaml`, for GPU and CPU respectively.
 
 ```sh
 cd <demo folder>
-conda env create -f ./screenshot_play_gpu.conda
+conda env create -f ./screenshot_play_gpu.conda.yaml
 ```
 
 To play:
