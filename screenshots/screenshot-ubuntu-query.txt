@@ -1,0 +1,10 @@
+click search
+click search box
+click discord
+click firefox # comment: look closer to find the red circle on the firefox icon
+click the terminal icon
+click the first dot at right side
+click the second dot at right side
+click date time at top
+click the dots icon at very left bottom corner
+click frequent

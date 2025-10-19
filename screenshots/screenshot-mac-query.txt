@@ -1,0 +1,5 @@
+click siri
+click java
+search vscode
+click the dots icon
+click the go back icon

@@ -1,0 +1,5 @@
+move slider to the right side
+move slider to the left side
+click display resolution
+click the display resolution dropdown list
+click windows update

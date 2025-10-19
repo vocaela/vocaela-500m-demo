@@ -1,0 +1,5 @@
+tap vpn
+tap airplane mode
+tap the radio button of airplane mode
+tap search box
+type in privacy

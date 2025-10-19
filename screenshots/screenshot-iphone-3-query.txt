@@ -1,0 +1,4 @@
+# comment: On iphone, 'swipe left' on a city tile is the common scenario to remove a city from weather list
+swipe left on shoreline
+swipe left on san jose
+tap the dots at top right corner

@@ -1,0 +1,4 @@
+tap wechat
+tap the icon with car
+tap the second icon at bottom
+tap the third icon at bottom
