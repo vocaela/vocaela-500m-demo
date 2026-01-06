@@ -5,3 +5,5 @@ swipe left on the phone picture
 tap the radio button of brand mail
 tap search box
 type "kids shoes"
+go back to previous screen
+go to home screen
