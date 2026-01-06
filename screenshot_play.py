@@ -1,4 +1,5 @@
-# Given a screenshot image play the instructions
+# Given a screenshot image and play with instructions
+import base64
 import json
 from logging import Logger
 from pathlib import Path
@@ -7,11 +8,11 @@ from typing import Any, Dict, List
 from PIL import ImageFont
 import torch
 import fire
+import requests
 
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
-Vocaelam_Computer_Use_System_Message = """
-You are an assistant trained to navigate the computer screen. 
+Vocaela_Computer_Use_System_Message = """You are an assistant trained to navigate the computer screen. 
 Given a task instruction, a screen observation, and an action history sequence, 
 output the next actions and wait for the next observation. 
 
@@ -38,8 +39,7 @@ output the next actions and wait for the next observation.
 If a parameter is not applicable, don't include it in the JSON object.
 """
 
-Vocaela_Mobile_Use_System_Message = """
-You are an assistant trained to navigate the mobile phone. 
+Vocaela_Mobile_Use_System_Message = """You are an assistant trained to navigate the mobile phone. 
 Given a task instruction, a screen observation, and an action history sequence, 
 output the next actions and wait for the next observation. 
 
@@ -57,17 +57,81 @@ output the next actions and wait for the next observation.
 <Action>the next actions</Action>
 
 `The next actions` can be one or multiple actions. Format `the next actions` as a JSON array of objects as below, each object is an action:
-[{"action": "<ACTION_TYPE>", "text": "<text>", "coordinate": [x,y], "swipe_from": "<swipe_from>", "swipe_direction": "<swipe_direction>", "button": "<button>"}]
+[{"action": "<ACTION_TYPE>", "text": "<text>", "coordinate": [x,y], "swipe_from": "<swipe_from>", "swipe_direction": "<swipe_direction>", "time": <time>, "button": "<button>"}]
 
 If a parameter is not applicable, don't include it in the JSON object.
 """
 
-_DEFAULT_MODEL_PATH = "vocaela/Vocaela-500M"
+Vocaela_2_Computer_Use_System_Message = """You are an assistant trained to navigate the computer screen. 
+Given a task instruction, a screen observation, and an action history sequence, 
+output the next actions and wait for the next observation. 
+
+## Allowed ACTION_TYPEs and parameters:
+1. `PRESS_KEY`: Press one specified key. Two parameters: `key`, string, the single key to press; `presses`, integer, the number of times to press the key (default is 1).
+2. `TYPE`: Type a string into an element. Parameter: `text`, string, the text to type.
+3. `MOUSE_MOVE`: Move the mouse cursor to a specified position. Parameter: `coordinate`, formatted as [x,y], the position to move the cursor to.
+4. `CLICK`: Click left mouse button once on an element. Parameter: `coordinate`, formatted as [x,y], the position to click on.
+5. `DRAG`: Drag the cursor with the left mouse button pressed, start and end positions are specified. Two parameters: `coordinate`, formatted as [x,y], the start position to drag from; `coordinate2`, formatted as [x2,y2], the end position to drag to.
+6. `RIGHT_CLICK`: Click right mouse button once on an element. Parameter: `coordinate`, formatted as [x,y], the position to right click on.
+7. `MIDDLE_CLICK`: Click middle mouse button once on an element. Parameter: `coordinate`, formatted as [x,y], the position to middle click on.
+8. `DOUBLE_CLICK`: Click left mouse button twice on an element. Parameter: `coordinate`, formatted as [x,y], the position to double click on.
+9. `SCROLL`: Scroll the screen (via mouse wheel). Parameter: `scroll_direction`, the direction (`up`/`down`/`left`/`right`) to scroll.
+10. `HOTKEY`: Press a combination of keys simultaneously. Parameter: `hotkeys`, list of strings, the keys to press together.
+11. `ANSWER`: Answer a specific question. Required parameter: `text`, string, the answer text.
+
+* NOTE *: The `coordinate` and `coordinate2` parameters (formatted as [x,y]) are the relative coordinates on the screenshot scaled to range of 0-1, [0,0] is the top-left corner and [1,1] is the bottom-right corner.
+
+## Format your response as
+<Action>the next actions</Action>
+
+`The next actions` can be one or multiple actions. Format `the next actions` as a JSON array of objects as below, each object is an action:
+[{"action": "<ACTION_TYPE>", "key": "<key>", "presses": <presses>, "hotkeys": ["<hotkeys>"], "text": "<text>", "coordinate": [x,y], "coordinate2": [x2,y2], "scroll_direction": "<scroll_direction>"}]
+
+If a parameter is not applicable, don't include it in the JSON object.
+"""
+
+Vocaela_2_Mobile_Use_System_Message = """You are an assistant trained to navigate the mobile phone. 
+Given a task instruction, a screen observation, and an action history sequence, 
+output the next actions and wait for the next observation. 
+
+## Allowed ACTION_TYPEs and parameters:
+1. `PRESS_KEY`: Press one specific key. Supports adb's `keyevent` such as 'volume_up', 'volume_down', 'power', 'camera', 'clear', etc. Parameter: `key`, string, the single key to press
+2. `CLICK`: Click/tap on the screen. Parameter: `coordinate`, formatted as [x,y], the position to click on.
+3. `LONG_PRESS`: Long press on the screen. Two parameters: `coordinate`, formatted as [x,y], the position to long press on; `time`, duration in seconds to long press.
+4. `GENERAL_SWIPE`: General swipe on a screen area. Two parameters: `swipe_from`, the start area to swipe from, only allowed value in {'top', 'bottom', 'left', 'right', 'center', `top_left`, `top_right`, `bottom_left`, `bottom_right`}; `swipe_direction`, the direction (`up`/`down`/`left`/`right`) to swipe towards.
+5. `ELEMENT_SWIPE`: Accurate swipe on a specified UI element. Two parameters: `coordinate`, formatted as [x,y], the precise start position to swipe from; `swipe_direction`, the direction (`up`/`down`/`left`/`right`) to swipe towards.
+6. `TYPE`: Type a string into an element. Parameter: `text`, string, the text to type.
+7. `SYSTEM_BUTTON`: Press a system button. Parameter: `button`, the system button to press, allowed button values: 'Back', 'Home', 'Menu', 'Enter'.
+8. `OPEN`: Open an app. Parameter: `text`, string, the app name to open.
+9. `ANSWER`: Answer a specific question. Parameter: `text`, string, the answer text.
+
+* NOTE *: `coordinate` parameter (formatted as [x,y]) is relative coordinate on the screenshot scaled to range of 0-1, [0,0] is the top-left corner and [1,1] is the bottom-right corner.
+
+## Format your response as
+<Action>the next actions</Action>
+
+`The next actions` can be one or multiple actions. Format `the next actions` as a JSON array of objects as below, each object is an action:
+[{"action": "<ACTION_TYPE>", "key": "<key>", "text": "<text>", "coordinate": [x,y], "swipe_from": "<swipe_from>", "swipe_direction": "<swipe_direction>", "time": <time>, "button": "<button>"}]
+
+If a parameter is not applicable, don't include it in the JSON object.
+"""
+
+_system_messages = {
+    "Vocaela_Computer_Use_System_Message": Vocaela_Computer_Use_System_Message,
+    "Vocaela_Mobile_Use_System_Message": Vocaela_Mobile_Use_System_Message,
+    "Vocaela_2_Computer_Use_System_Message": Vocaela_2_Computer_Use_System_Message,
+    "Vocaela_2_Mobile_Use_System_Message": Vocaela_2_Mobile_Use_System_Message,
+}
+
+_DEFAULT_MODEL_PATH = "vocaela/Vocaela-2-500M-1024R2"
 _DEFAULT_MAX_NEW_TOKENS: int = 512
 _DEFAULT_TEMPERATURE: float = 0.0
 _DEFAULT_TOP_P: float = 1.0
 _DEFAULT_TOP_K: int = -1
 _DEFAULT_DTYPE: str = "float16"
+
+_MODEL_IMAGE_TOKEN = "<image>"
+_LLAMACPP_MEDIA_TOKEN = "<__media__>"
 
 class HFInferenceClient:
     def __init__(
@@ -136,28 +200,88 @@ class HFInferenceClient:
             "text": generated_texts[0],
         }
 
+# The reason we need this python-llampacpp hybrid client is because llamacpp doesn't support the custom chat template yet. So we need to format the prompt outside and use the llamacpp's /completions endpoint instead of OAI compatible endpoint.
+class LlamacppInferenceClient:
+    def __init__(
+            self, 
+            endpoint: str,
+            model_path: str, # only used for apply chat_template
+            temperature: float = _DEFAULT_TEMPERATURE,
+            max_new_tokens: int = _DEFAULT_MAX_NEW_TOKENS,
+            top_p: float = _DEFAULT_TOP_P,
+            top_k: int = _DEFAULT_TOP_K,
+            stop_strings: List[str]|str = None,
+            ):
+        self.model_path = model_path
+        self.endpoint = endpoint
+        self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
+        self.top_p = top_p
+        self.top_k = top_k
+        self.stop_strings = stop_strings
+        
+        self.processor = AutoProcessor.from_pretrained(model_path)
+        
+    def predict(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        # get image from messages
+        images = []
+        for message in messages:
+            for content in message["content"]:
+                if content["type"] == "image":
+                    image = content.get("path", None) or content.get("image", None) or content.get("url", None)
+                    if not image.startswith("data:"): # it is a path
+                        # to base64
+                        with open(image, "rb") as image_file:
+                            image = base64.b64encode(image_file.read()).decode('utf-8') # llamacpp assume pure base64 string instead of that with data:image/png;base64, prefix
+                    images.append(image)
+        if len(images) != 1:
+            raise ValueError("Only one image is supported in the messages.")
+
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        text = text.replace(_MODEL_IMAGE_TOKEN, _LLAMACPP_MEDIA_TOKEN)  # replace with llama-cpp media token
+
+        payload = {
+            "prompt": {
+                "prompt_string": text,
+                "multimodal_data": images
+            },
+            "temperature": self.temperature,
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "n_predict": self.max_new_tokens,
+            "stop": self.stop_strings,
+        }
+        payload = {k: v for k, v in payload.items() if v is not None}
+        # http post to endpoint
+        response = requests.post(
+            self.endpoint,
+            json=payload,
+        )
+        response_json = response.json()
+        prediction_text = response_json["content"]
+        return {
+            "text": prediction_text,
+        }
 
 def create_messages(image_path, instruction, system_message: str):
-    messages = [
-        {
-            "role": "system",
-            "content": [
-                {"type": "text", "text": system_message}
-            ]
-        },
-        {
-            "role": "user", 
-            "content": [
-                {
-                    "type": "image",
-                    "url": image_path
-                },
-                {"type": "text", "text": instruction}
-            ]
-        },
-    ]
-
-    return messages
+    return [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": system_message}
+                ]
+            },
+            {
+                "role": "user", 
+                "content": [
+                    {
+                        "type": "image",
+                        "url": image_path
+                    },
+                    {"type": "text", "text": instruction}
+                ]
+            },
+        ]
 
 def parse_actions_from_output(output: str):
     start = output.find("<Action>")
@@ -176,7 +300,8 @@ def draw_groundings_on_image(image_path, output_text: str, output_path):
     draw = ImageDraw.Draw(image)
     width, height = image.size
     # first draw actions text on top-left corner
-    font = ImageFont.truetype("DejaVuSans.ttf", size=12)  # ← control size here
+    # font = ImageFont.truetype("DejaVuSans.ttf", size=12)  # ← control size here
+    font = ImageFont.load_default()
     text_x, text_y = 10, 10
     bbox = draw.textbbox((text_x, text_y), output_text, font=font)
     # Draw rectangle background
@@ -208,6 +333,7 @@ def draw_groundings_on_image(image_path, output_text: str, output_path):
 
     image.save(output_path)
 
+
 _help_msg = """Enter instruction or command:
   - <instruction>: directly type your instruction to interact with the screenshot 
   - /img <image **full path**>: specify screenshot image **full path**
@@ -215,16 +341,31 @@ _help_msg = """Enter instruction or command:
   - /mobile: switch to mobile mode
   - /exit: exit the program
 """
+
+def get_system_message_name(desktop: bool, mobile: bool, model_path: str) -> str:
+    if desktop and mobile:
+        raise ValueError("Only one of desktop or mobile can be True.")
+    
+    if desktop:
+        return "Vocaela_2_Computer_Use_System_Message" if "Vocaela-2-" in model_path else "Vocaela_Computer_Use_System_Message"
+    elif mobile:
+        return "Vocaela_2_Mobile_Use_System_Message" if "Vocaela-2-" in model_path else "Vocaela_Mobile_Use_System_Message"
+    else:
+        raise ValueError("Either desktop or mobile must be True.")
+    
 def main(
-    model_path: str = _DEFAULT_MODEL_PATH,
+    model_path: str = _DEFAULT_MODEL_PATH, # local path or hf name; required even if using llamacpp endpoint, for formatting the prompt
+    llamacpp_endpoint: str = None, # if specified, use llamacpp endpoint instead of HFInferenceClient, format like `http://localhost:8081/completion`
+    # below are the same agnostic of using HFInferenceClient or LlamacppInferenceClient
     desktop: bool = None,
     mobile: bool = None,
     temperature: float = _DEFAULT_TEMPERATURE,
     max_new_tokens: int = _DEFAULT_MAX_NEW_TOKENS,
     top_p: float = _DEFAULT_TOP_P,
     top_k: int = _DEFAULT_TOP_K,
-    torch_dtype: str = _DEFAULT_DTYPE,
     stop_strings: list[str]|str = None,
+    # below only for HFInferenceClient
+    torch_dtype: str = _DEFAULT_DTYPE,
     output_skip_special_tokens: bool = False, # output all tokens for transparency, set to True to skip them.
 ):
     if desktop is None and mobile is None:
@@ -241,28 +382,46 @@ def main(
     elif not desktop and not mobile:
         raise ValueError("One of desktop or mobile must be True.")
     
-    system_message = Vocaelam_Computer_Use_System_Message if desktop else Vocaela_Mobile_Use_System_Message
+    # set system message
+    system_message_name = get_system_message_name(desktop, mobile, model_path)    
     torch_dtype = getattr(torch, torch_dtype)
-    inference_client = HFInferenceClient(
-        model_path=model_path,
-        temperature=temperature,
-        max_new_tokens=max_new_tokens,
-        top_p=top_p,
-        top_k=top_k,
-        stop_strings=stop_strings,
-        torch_dtype=torch_dtype,
-        output_skip_special_tokens=output_skip_special_tokens,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-    )
+
+    if llamacpp_endpoint is not None:
+        print("Using LlamacppInferenceClient")
+        inference_client = LlamacppInferenceClient(
+            endpoint=llamacpp_endpoint,
+            model_path=model_path,
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+            top_p=top_p,
+            top_k=top_k,
+            stop_strings=stop_strings,
+        )
+    else:
+        print("Using HFInferenceClient")
+        inference_client = HFInferenceClient(
+            model_path=model_path,
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+            top_p=top_p,
+            top_k=top_k,
+            stop_strings=stop_strings,
+            torch_dtype=torch_dtype,
+            output_skip_special_tokens=output_skip_special_tokens,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
     
     image_path = None
     instruction = None
+    model_version = "Vocaela-2" if "vocaela-2-" in model_path.lower() else "Vocaela"
     while True:
         try:
             mode = "desktop" if desktop else "mobile"
             print("\nCurrent settings:")
+            print(f"  Model version: {model_version}")
             print(f"  Mode: {mode}")
-            print(f"  Image: {image_path}\n")
+            print(f"  Image: {image_path}")
+            print(f"  System message name: {system_message_name}\n")
             
             cmd = input(_help_msg)
             if cmd.startswith("/img"):
@@ -277,13 +436,13 @@ def main(
             elif cmd.startswith("/desktop"):
                 desktop = True
                 mobile = False
-                system_message = Vocaelam_Computer_Use_System_Message
+                system_message_name = get_system_message_name(desktop, mobile, model_path)
                 print("Switched to desktop mode.")
                 continue
             elif cmd.startswith("/mobile"):
                 desktop = False
                 mobile = True
-                system_message = Vocaela_Mobile_Use_System_Message
+                system_message_name = get_system_message_name(desktop, mobile, model_path)
                 print("Switched to mobile mode.")
                 continue
             elif cmd.startswith("/exit"):
@@ -296,12 +455,14 @@ def main(
             
             mode = "desktop" if desktop else "mobile"
             print("\nYou chose:")
+            print(f"  Model version: {model_version}")
             print(f"  Mode: {mode}")
             print(f"  Image: {image_path}")
+            print(f"  System message name: {system_message_name}\n")
             print(f"  Instruction: {cmd}\n")
             
             instruction = cmd
-            messages = create_messages(image_path=image_path, instruction=instruction, system_message=system_message)
+            messages = create_messages(image_path=image_path, instruction=instruction, system_message=_system_messages[system_message_name])
             output = inference_client.predict(messages)['text']
             print(f"Output: {output}\n")
             timestampstr = strftime("%Y%m%d_%H%M%S")
